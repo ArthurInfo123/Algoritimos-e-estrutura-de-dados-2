@@ -213,6 +213,123 @@ void processarCSV(char *nomeArquivoCSV) {
     printf("\nProcessamento concluído. Total de linhas lidas: %lld\n", linhasLidas);
 }
 
+void gerarIndiceParcial() {
+    FILE *arquivoProdutos = fopen("produtos.bin", "rb");   // Abre o arquivo de produtos
+    FILE *indiceProdutos = fopen("indice_parcial_produtos.idx", "wb");  // Cria o arquivo de índice
+
+    if (arquivoProdutos == NULL || indiceProdutos == NULL) {
+        printf("Erro ao abrir arquivos de produtos ou de índice.\n");
+        return;
+    }
+
+    Produto produto;
+    long long posProduto;
+    int contador = 0;  // Para contar quantos produtos foram lidos
+
+    // Lê o arquivo de produtos inteiro
+    while (fread(&produto, sizeof(Produto), 1, arquivoProdutos) == 1) {
+        posProduto = ftell(arquivoProdutos) - sizeof(Produto);  // Guarda a posição do produto
+
+        // A cada 10 produtos, grava o índice no arquivo de índice
+        if (contador % 10 == 0) {
+            Indice indiceProduto;
+            indiceProduto.chave = produto.chave;
+            indiceProduto.posicao = posProduto;
+
+            if (fwrite(&indiceProduto, sizeof(Indice), 1, indiceProdutos) != 1) {
+                printf("Erro ao escrever no arquivo indice_produtos.idx\n");
+                break;
+            }
+        }
+
+        contador++;
+    }
+
+    // Fechar os arquivos após o processamento
+    fclose(arquivoProdutos);
+    fclose(indiceProdutos);
+
+    printf("Índice parcial gerado com sucesso!\n");
+}
+
+void pesquisaBinariaProdutoParcial(int chaveGlobal) {
+    FILE *indiceProdutos = fopen("indice_parcial_produtos.idx", "rb");
+    FILE *arquivoProdutos = fopen("produtos.bin", "rb");
+    
+    if (indiceProdutos == NULL || arquivoProdutos == NULL) {
+        printf("Erro ao abrir arquivos de índice ou de produtos.\n");
+        return;
+    }
+
+    Indice indice;
+    long long left = 0, right, mid;
+
+    fseek(indiceProdutos, 0, SEEK_END);
+    right = ftell(indiceProdutos) / sizeof(Indice) - 1;
+
+    // Pesquisa binária
+    while (left <= right) {
+        mid = left + (right - left) / 2;
+        fseek(indiceProdutos, mid * sizeof(Indice), SEEK_SET);
+        fread(&indice, sizeof(Indice), 1, indiceProdutos);
+
+        if (indice.chave == chaveGlobal) {
+            // Chave encontrada, busca o produto diretamente
+            Produto produto;
+            fseek(arquivoProdutos, indice.posicao, SEEK_SET);
+            fread(&produto, sizeof(Produto), 1, arquivoProdutos);
+
+            // Exibir informações do produto
+            printf("Chave do Produto: %d\n", produto.chave);
+            printf("ID do Produto: %d\n", produto.product_id);
+            printf("Categoria: %s\n", produto.category_code);
+            printf("Marca: %s\n", produto.brand);
+            printf("Preço: %.2f\n", produto.price);
+            fclose(indiceProdutos);
+            fclose(arquivoProdutos);
+            return;
+        }
+
+        if (indice.chave < chaveGlobal) {
+            left = mid + 1;
+        } else {
+            right = mid - 1;
+        }
+    }
+
+    // Se não encontrar a chave exata, faz uma busca linear a partir da posição mais próxima
+    printf("Chave exata não encontrada. Iniciando busca linear...\n");
+
+    // A busca linear começa a partir da posição `right`
+    fseek(indiceProdutos, right * sizeof(Indice), SEEK_SET);
+
+    // Lê o primeiro índice mais próximo
+    fread(&indice, sizeof(Indice), 1, indiceProdutos);
+
+    while (fread(&indice, sizeof(Indice), 1, indiceProdutos) == 1) {
+        if (indice.chave >= chaveGlobal) {
+            Produto produto;
+            fseek(arquivoProdutos, indice.posicao, SEEK_SET);
+            fread(&produto, sizeof(Produto), 1, arquivoProdutos);
+
+            // Exibir informações do produto
+            printf("Chave do Produto: %d\n", produto.chave);
+            printf("ID do Produto: %d\n", produto.product_id);
+            printf("Categoria: %s\n", produto.category_code);
+            printf("Marca: %s\n", produto.brand);
+            printf("Preço: %.2f\n", produto.price);
+            break;
+        }
+    }
+
+    // Fecha os arquivos após a busca
+    fclose(indiceProdutos);
+    fclose(arquivoProdutos);
+}
+
+
+
+
 void procuraProdutos()
 {
     FILE *p = fopen("produtos.bin", "rb");
@@ -457,6 +574,8 @@ void pesquisaBinariaProduto(int chave)
     fclose(arquivoProdutos);
 }
 
+
+
 int main()
 {
     char nomeArquivoCSV[255];
@@ -472,6 +591,9 @@ int main()
         printf("Digite 4 para adicionar um produto\n");
         printf("Digite 5 para remover um produto\n");
         printf("Digite 6 para consultar produtos por pesquisa binária no arquivo de índices\n");
+        printf("Digite 7 para adicionar produtos por um arquivo de indices parcial\n");
+        printf("Digite 8 para consultar produtos por pesquisa binaria de indices parcial\n");
+
         printf("Digite 9 para ler um arquivo csv\n");
         printf("Digite 0 para Sair\n");
         scanf("%d", &i);
@@ -504,6 +626,14 @@ int main()
             scanf("%d", &chave);
             pesquisaBinariaProduto(chave);
             break;
+        case 7:
+            gerarIndiceParcial();
+            break;    
+        case 8:           
+            printf("Digite a chave");
+            scanf("%d", &chave); 
+            pesquisaBinariaProdutoParcial(chave);
+            break;   
         case 9:
             printf("Digite o nome do arquivo CSV: \n");
             scanf("%s", nomeArquivoCSV);
